@@ -27,3 +27,4 @@ TODO:
 - [ ] Document grouped thread usage
 - [ ] Log levels and debugging options
 - [ ] Published on the Asset Store
+- [ ] Examples using methods as callbacks for those unfamiliar with lambdas
