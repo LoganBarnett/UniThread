@@ -15,10 +15,10 @@ How UniThread works is that it wraps a method/lambda into a thread (this is your
 UniThread.AddThread(
     gameObject.name, // name the job after my game object
 	() => {
-		var result = DoSomeLongTask();
+		var result = BuildLargeMesh();
 		return result; // if your task doesn't have anything to return, just return null
 	},
-	(result) => GetComponent<MeshFilter>().mesh = result.GetMeshData(), // executes on the main thread, can touch Unity
+	(result) => GetComponent<MeshFilter>().mesh = (result as MeshResults).GetUnityMesh(), // executes on the main thread, can touch Unity
 	Debug.LogException // Debug.LogException is a good default to use if you don't have anything to handle the error
 );
 ```
