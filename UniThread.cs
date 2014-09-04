@@ -54,6 +54,10 @@ public class UniThread : MonoBehaviour {
 		public System.Exception Exception { get; set; }
 		public bool ReturnsResult { get; set; }
 		public bool IsThreaded { get; set; }
+
+		public override string ToString () {
+			return string.Format ("[TaskRunner: Name={0}, GroupName={1}, PositionInGroup={2}, TaskWithResult={3}, Task={4}, IsComplete={5}, OnComplete={6}, OnError={7}, Result={8}, GroupResults={9}, Exception={10}, ReturnsResult={11}, IsThreaded={12}]", Name, GroupName, PositionInGroup, TaskWithResult, Task, IsComplete, OnComplete, OnError, Result, GroupResults, Exception, ReturnsResult, IsThreaded);
+		}
 	}
 
 	// TODO: Should make this OO. UniThread itself is doing way too much of the bookkeeping that should be internal
@@ -124,6 +128,7 @@ public class UniThread : MonoBehaviour {
 			OnError = onError,
 			TaskWithResult = jobToThread,
 			ReturnsResult = true,
+			IsThreaded = true,
 		};
 
 		Add(taskRunner);
@@ -390,7 +395,6 @@ public class UniThread : MonoBehaviour {
 			for(var i = 0; i < taskRunners.Count; ++i) {
 
 				var taskRunner = taskRunners[i];
-
 				if(!taskRunner.IsComplete && taskRunner.IsThreaded) continue;
 				if(!taskRunner.IsThreaded) {
 					try {
@@ -412,7 +416,9 @@ public class UniThread : MonoBehaviour {
 
 				try {
 					if(taskRunner.Exception == null) {
-						if(taskRunner.OnComplete != null) taskRunner.OnComplete(taskRunner.Result);
+						if(taskRunner.OnComplete != null) {
+							taskRunner.OnComplete(taskRunner.Result);
+						}
 					}
 					else {
 						if(taskRunner.OnError != null) taskRunner.OnError(taskRunner.Exception);
