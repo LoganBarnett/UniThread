@@ -34,8 +34,10 @@ public class UniThread : MonoBehaviour {
 	static UniThread threadRunner = null;
 	static Dictionary<string, TaskGroup> groups = new Dictionary<string, TaskGroup>();
 	static List<TaskRunner> taskRunners = new List<TaskRunner>();
+	static Queue<TaskRunner> enqueuedTaskRunners = new Queue<TaskRunner>(); // task runners that will be added when the lock is lifted
 	static ReaderWriterLockSlim groupLock = new ReaderWriterLockSlim();
 	static ReaderWriterLockSlim taskLock = new ReaderWriterLockSlim();
+	static ReaderWriterLockSlim enqueuedTaskLock = new ReaderWriterLockSlim();
 	static Dictionary<TaskGroup, ReaderWriterLockSlim> groupSpecificTaskLock = new Dictionary<TaskGroup, ReaderWriterLockSlim>();
 //	int framesUsed = 0;
 //	int threadsConsumed = 0;
@@ -348,12 +350,29 @@ public class UniThread : MonoBehaviour {
 	}
 	
 	static void Add(TaskRunner taskRunner) {
-		taskLock.EnterWriteLock();
-		try {
-			taskRunners.Add(taskRunner);
+		// if there are any read locks, just give up (why do we even have TryEnterWriteLock if it blows up when a readlock is on?)
+		// wait a little bit, then give up and enqueue
+		if(taskLock.CurrentReadCount == 0 && taskLock.TryEnterWriteLock(10)) {
+			try {
+				taskRunners.Add(taskRunner);
+			}
+			finally {
+				taskLock.ExitWriteLock();
+			}
 		}
-		finally {
-			taskLock.ExitWriteLock();
+		else {
+			// we can't write to taskRunners right now, so enqueue it for later
+			// It might be possible for there to already be a write lock present by the time we get here.
+			// However, it should be safe to just sit until the lock is lifted, since all write operations to this queue
+			// are lightweight.
+			while(enqueuedTaskLock.CurrentReadCount != 0) { Thread.Sleep (10); }
+			enqueuedTaskLock.TryEnterWriteLock(-1);
+			try {
+				enqueuedTaskRunners.Enqueue(taskRunner);
+			}
+			finally {
+				enqueuedTaskLock.ExitWriteLock();
+			}
 		}
 		if(taskRunner.IsThreaded) ThreadPool.QueueUserWorkItem(new WaitCallback(ThreadExecuter), taskRunner);
 	}
@@ -467,10 +486,31 @@ public class UniThread : MonoBehaviour {
 					taskRunners.RemoveAt(i);
 				}
 			}
+			// now add in whatever is enqueued
+			enqueuedTaskLock.TryEnterReadLock(-1);
+			try {
+				taskRunners.AddRange(enqueuedTaskRunners);
+			}
+			finally {
+				enqueuedTaskLock.ExitReadLock();
+			}
+			// is this overkill?
+			// It might be possible for there to already be a write lock present by the time we get here.
+			// However, it should be safe to just sit until the lock is lifted, since all write operations to this queue
+			// are lightweight.
+			while(enqueuedTaskLock.CurrentReadCount != 0) { Thread.Sleep (10); }
+			enqueuedTaskLock.TryEnterWriteLock(-1);
+			try {
+				enqueuedTaskRunners.Clear();
+			}
+			finally {
+				enqueuedTaskLock.ExitWriteLock();
+			}
 		}
 		finally {
 			taskLock.ExitWriteLock();
 		}
+
 
 
 		groupLock.EnterReadLock();
